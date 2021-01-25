@@ -5,7 +5,7 @@
 \title{Add a density plot to a chronicle report}
 \usage{
 add_density(
-  report = new_report(),
+  report = "",
   dt,
   value,
   groups = NULL,

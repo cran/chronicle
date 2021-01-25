@@ -9,7 +9,7 @@ make_lineplot(
   x,
   y,
   groups = NULL,
-  faceted = TRUE,
+  faceted = FALSE,
   scales = "fixed",
   smooth_trend = FALSE,
   ggtheme = "minimal",
