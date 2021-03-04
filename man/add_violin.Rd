@@ -25,7 +25,7 @@ add_violin(
 )
 }
 \arguments{
-\item{report}{Character string containing the text of an Rmarkdown report header (and possibly more chunks). Easily create one with chronicle::new_report(), and if NULL, that will be the default value.}
+\item{report}{Character string containing all the R Markdown chunks previously added. Default is '', an empty report.}
 
 \item{dt}{Table with the data for the plot.}
 
@@ -66,7 +66,7 @@ An rmarkdown chunk as a character string, now containing a chunk for adding the 
 Add a violin plot to a chronicle report
 }
 \examples{
-html_report <- add_violin(report = new_report(),
+html_report <- add_violin(report = "",
                              dt = iris,
                              value = 'Sepal.Length',
                              groups = 'Species', jitter = TRUE)

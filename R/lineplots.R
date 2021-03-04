@@ -6,12 +6,14 @@
 #' @param groups Name of the column containing the different groups.
 #' @param faceted If TRUE (default), each group will be plotted separately.
 #' @param scales From ggplot2::facet_wrap: Should scales be 'fixed', 'free', or free in one dimension ('free_x', 'free_y'). Default is 'fixed'.
-#' @param smooth_trend If TRUE, adds a ggplot2::geom_smooth() line to the plot.
+#' @param show_trend If TRUE, adds a ggplot2::geom_smooth() line to the plot.
+#' @param trend_method The method ggplot2::geom_smooth will use. Default is 'loess', which is a local polynomial regression fit
 #' @param ggtheme ggplot2 theme function to apply. Default is ggplot2::theme_minimal.
 #' @param x_axis_label Label for the x axis.
 #' @param y_axis_label Label for the y axis.
 #' @param plot_palette Character vector of hex codes specifying the colors to use on the plot.
 #' @param plot_palette_generator Palette from the viridis package, used in case plot_palette is unspecified or insufficient for the number of colors required.
+#' @param static If TRUE, the output will be static ggplot chart instead of an interactive ggplotly chart. Default is FALSE.
 #'
 #' @export
 #' @return A plotly-ized version of a grouped ggplot line plot.
@@ -37,12 +39,19 @@ make_lineplot <- function(dt,
                           groups = NULL,
                           faceted = FALSE,
                           scales = 'fixed',
-                          smooth_trend = FALSE,
+                          show_trend = FALSE,
+                          trend_method = 'loess',
                           ggtheme = 'minimal',
                           x_axis_label = NULL,
                           y_axis_label = NULL,
                           plot_palette = NULL,
-                          plot_palette_generator = 'plasma'){
+                          plot_palette_generator = 'plasma',
+                          static = FALSE){
+
+  dt_cols <- c(x, y, groups)
+  if(any((!dt_cols %in% colnames(dt)))){
+    stop(paste(setdiff(dt_cols, colnames(dt)), collapse = ', '), ' not found on dt.')
+  }
 
   # check how many colors are needed for plotting
   plot_palette_length <- ifelse(test = is.null(groups),
@@ -75,7 +84,7 @@ make_lineplot <- function(dt,
 
   #if not provided, use palette from viridis::plasma
   if(is.null(plot_palette)){
-    plot_palette <- plot_palette_generator(plot_palette_length, begin = 0, end = .80)
+    plot_palette <- plot_palette_generator(plot_palette_length, begin = 0, end = .8)
   }else if(plot_palette_length > length(plot_palette)){
     warning('Insufficient palette length provided for a line plot of ',
             x, ',', y, if(!is.null(groups)){paste(' by', groups)},
@@ -86,7 +95,8 @@ make_lineplot <- function(dt,
   }
 
   # create the plot structure depending of the group
-  if(is.null(groups)){
+  null_groups <- is.null(groups)
+  if(null_groups){
     # make a dummy group variable
     groups <- 'groups'
     dt$groups <- 'A'
@@ -95,15 +105,17 @@ make_lineplot <- function(dt,
                               ggplot2::aes(x = .data[[x]],
                                            y = .data[[y]],
                                            color = .data[[groups]])) +
-    ggplot2::geom_line() +
-    ggplot2::geom_point() +
+    ggplot2::geom_line(alpha = .85) +
+    ggplot2::geom_point(alpha = .85) +
     ggtheme() +
+    ggplot2::theme(panel.background = ggplot2::element_rect(fill = "transparent", colour = NA),
+                   plot.background =  ggplot2::element_rect(fill = "transparent", colour = NA)) +
     ggplot2::scale_y_continuous(labels = scales::number_format(accuracy = 0.01,
                                                                decimal.mark = '.',
                                                                big.mark = ',')) +
     ggplot2::scale_color_manual(values = plot_palette)
 
-  if(is.null(groups)){
+  if(null_groups){
     lineplot <- lineplot + ggplot2::theme(legend.position = 'none')
   }
 
@@ -130,11 +142,13 @@ make_lineplot <- function(dt,
   }
 
   # smooth trend line
-  if(as.logical(smooth_trend)){
-    lineplot <- lineplot +ggplot2::geom_smooth()
+  if(as.logical(show_trend)){
+    lineplot <- lineplot + ggplot2::geom_smooth(formula = y~x, method = trend_method)
+  }
+  if(!static){
+    lineplot <- plotly::ggplotly(lineplot,  tooltip = c('x', 'y', if(groups != 'groups'){'color'}))
   }
 
-  lineplot <- plotly::ggplotly(lineplot,  tooltip = c('x', 'y', if(groups != 'groups'){'color'}))
   return(lineplot)
 }
 
@@ -147,7 +161,8 @@ make_lineplot <- function(dt,
 #' @param groups Name of the column containing the different groups.
 #' @param faceted If TRUE (default), each group will be plotted separately.
 #' @param scales From ggplot2::facet_wrap: Should scales be 'fixed', 'free', or free in one dimension ('free_x', 'free_y'). Default is 'fixed'.
-#' @param smooth_trend If TRUE, adds a ggplot2::geom_smooth() line to the plot. Default is FALSE.
+#' @param show_trend If TRUE, adds a ggplot2::geom_smooth() line to the plot.
+#' @param trend_method The method ggplot2::geom_smooth will use. Default is 'loess', which is a local polynomial regression fit
 #' @param ggtheme ggplot2 theme function to apply. Default is ggplot2::theme_minimal.
 #' @param x_axis_label Label for the x axis.
 #' @param y_axis_label Label for the y axis.
@@ -165,7 +180,7 @@ make_lineplot <- function(dt,
 #' @export
 #'
 #' @examples
-#' html_report <- add_lineplot(report = new_report(),
+#' html_report <- add_lineplot(report = "",
 #'                             dt = ggplot2::mpg,
 #'                             x = 'hwy',
 #'                             y = 'cty',
@@ -179,7 +194,8 @@ add_lineplot <- function(report = '',
                          groups = NULL,
                          faceted = NULL,
                          scales = NULL,
-                         smooth_trend = NULL,
+                         show_trend = NULL,
+                         trend_method = NULL,
                          ggtheme = NULL,
                          x_axis_label = NULL,
                          y_axis_label = NULL,
@@ -193,12 +209,18 @@ add_lineplot <- function(report = '',
                          fig_width = NULL,
                          fig_height = NULL){
 
+  dt_cols <- c(x, y, groups)
+  if(any((!dt_cols %in% colnames(dt)))){
+    stop(paste(setdiff(dt_cols, colnames(dt)), collapse = ', '), ' not found on dt.')
+  }
+
   params <- list(x = x,
                  y = y,
                  groups = groups,
                  faceted = faceted,
                  scales = scales,
-                 smooth_trend = smooth_trend,
+                 show_trend = show_trend,
+                 trend_method = trend_method,
                  ggtheme = ggtheme,
                  x_axis_label = x_axis_label,
                  y_axis_label = y_axis_label,

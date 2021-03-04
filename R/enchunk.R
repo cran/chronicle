@@ -32,7 +32,7 @@ add_chunk <- function(report = '',
                       warning = FALSE,
                       fig_width = NULL,
                       fig_height = NULL){
-  # chack that dt_expr is the name of the table, not the table
+  # check that dt_expr is the name of the table, not the table
   if(!is.character(dt_expr)){
     stop('Could not parse plot data expression. dt_expr should be a character with the name of the table')
   }
@@ -48,19 +48,22 @@ add_chunk <- function(report = '',
 
   # build chunk header with given parameters
   chunk_header <- paste0('```{r, ',
-                         paste(c(paste('echo = ', echo),
-                                 paste('message = ', message),
-                                 paste('warning = ', warning),
-                                 if(!is.null(fig_width)){paste('fig.width =', fig_width)},
-                                 if(!is.null(fig_width)){paste('fig.height =', fig_height)}),
+                         paste(c(paste0('echo=', echo),
+                                 paste0('message=', message),
+                                 paste0('warning=', warning),
+                                 if(!is.null(fig_width)){paste('fig.width=', fig_width)}else{'fig.width=figure_width'},
+                                 if(!is.null(fig_width)){paste('fig.height=', fig_height)}else{'fig.height=figure_height'}),
                                collapse = ', '),
                          '}')
 
   # parse function call
   fun_name <- deparse(substitute(fun))
-  vals_assignment <- paste(names(params), paste0("'", params, "'"), sep = ' = ', collapse = ', ')
+  vals_assignment <- paste(names(params), paste0("'", params, "'"), sep = ' = ', collapse = ',\n  ') %>%
+    paste0(', static = set_static')
 
-  fun_call <- glue::glue('{fun_name}(dt = {dt_expr}, ') %>% paste0(vals_assignment) %>%  paste0(')')
+  fun_call <- glue::glue('{fun_name}(dt = {dt_expr}, ') %>%
+    paste0(vals_assignment) %>%
+    paste0(')')
 
   # enclose and the call around Rmarkdown header and closing
   chunk <- paste(chunk_title, chunk_header, fun_call, '```', sep = '\n')

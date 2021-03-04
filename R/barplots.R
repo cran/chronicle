@@ -12,6 +12,7 @@
 #' @param y_axis_label Label for the y axis.
 #' @param plot_palette Character vector of hex codes specifying the colors to use on the plot.
 #' @param plot_palette_generator Palette from the viridis package used in case plot_palette is unspecified or insufficient for the number of colors required
+#' @param static If TRUE, the output will be static ggplot chart instead of an interactive ggplotly chart. Default is FALSE.
 #'
 #' @export
 #' @return A plotly-ized version of a ggplot bar plot.
@@ -36,12 +37,26 @@ make_barplot <- function(dt,
                          x_axis_label = NULL,
                          y_axis_label = NULL,
                          plot_palette = NULL,
-                         plot_palette_generator = 'plasma'){
-  dt1 <- setDT(copy(dt))
+                         plot_palette_generator = 'plasma',
+                         static = FALSE){
+
+  # check that the specified columns are present in the data
+  dt_cols <- c(bars, value, break_bars_by)
+  if(any((!dt_cols %in% colnames(dt)))){
+    stop(paste(setdiff(dt_cols, colnames(dt)), collapse = ', '), ' not found on dt.')
+  }
+
+
+  dt1 <- data.table::setDT(copy(dt))
   # coerce to character
   dt1[[bars]] <- as.character(dt1[[bars]])
   if(!is.null(break_bars_by)){
     dt1[[break_bars_by]] <- as.character(dt1[[break_bars_by]])
+
+    # avoid a redundant specification
+    if(bars == break_bars_by){
+      break_bars_by <- NULL
+    }
   }
 
   # summarise table for plot. If no value is specified, use counts
@@ -55,7 +70,7 @@ make_barplot <- function(dt,
 
   if(as.logical(sort_by_value)){
     # if horizontal, flip the value of sort_decreasing (will apply ggplot2::coord_flip)
-    if(horizontal){
+    if(as.logical(horizontal)){
       sort_decreasing <- !as.logical(sort_decreasing)
     }
 
@@ -105,7 +120,7 @@ make_barplot <- function(dt,
 
   #if not provided, use palette from viridis::plasma
   if(is.null(plot_palette)){
-    plot_palette <- plot_palette_generator(plot_palette_length, begin = 0, end = .9)
+    plot_palette <- plot_palette_generator(plot_palette_length, begin = 0, end = .8)
   }else if(plot_palette_length > length(plot_palette)){
     warning('Insufficient palette length provided for a bar plot of ',
             value, ' by ', ifelse(test = is.null(break_bars_by),
@@ -124,8 +139,10 @@ make_barplot <- function(dt,
                                           fill = .data[[ifelse(test = is.null(break_bars_by),
                                                                yes = bars,
                                                                no = break_bars_by)]])) +
-    ggplot2::geom_bar(stat = 'identity') +
+    ggplot2::geom_bar(stat = 'identity', alpha = .95) +
     ggtheme() +
+    ggplot2::theme(panel.background = ggplot2::element_rect(fill = "transparent", colour = NA),
+                   plot.background =  ggplot2::element_rect(fill = "transparent", colour = NA)) +
     ggplot2::scale_y_continuous(labels = scales::number_format(accuracy = 0.01,
                                                                decimal.mark = '.',
                                                                big.mark = ','))  +
@@ -143,7 +160,13 @@ make_barplot <- function(dt,
     barplot <- barplot + ggplot2::coord_flip()
   }
 
-  barplot <- plotly::ggplotly(barplot, tooltip = c('x', 'y', if(!is.null(break_bars_by)){'fill'}))
+  if(!static){
+    barplot <- plotly::ggplotly(barplot,
+                               tooltip = c('x', 'y', if(!is.null(break_bars_by)){'fill'})) # %>%
+      # plotly::layout(paper_bgcolor  = "rgba(0, 0, 0, 0)",
+      #                grid = '',
+      #                plot_bgcolor = "rgba(0, 0, 0, 0)")
+  }
   return(barplot)
 }
 
@@ -201,6 +224,14 @@ add_barplot <- function(report = '',
                         warning = FALSE,
                         fig_width = NULL,
                         fig_height = NULL){
+
+  # if a data.frame is provided, check if the specified columns are present
+  if(is.data.frame(dt)){
+    dt_cols <- c(bars, value, break_bars_by)
+    if(any((!dt_cols %in% colnames(dt)))){
+      stop(paste(setdiff(dt_cols, colnames(dt)), collapse = ', '), ' not found on dt.')
+    }
+  }
 
   params <- list(bars = bars,
                  value = value,

@@ -12,7 +12,8 @@ add_scatterplot(
   groups = NULL,
   faceted = NULL,
   scales = NULL,
-  smooth_trend = NULL,
+  show_trend = NULL,
+  trend_method = NULL,
   ggtheme = NULL,
   x_axis_label = NULL,
   y_axis_label = NULL,
@@ -28,7 +29,7 @@ add_scatterplot(
 )
 }
 \arguments{
-\item{report}{Character string containing the text of an Rmarkdown report header (and possibly more chunks). Easily create one with chronicle::new_report(), and if NULL, that will be the default value.}
+\item{report}{Character string containing all the R Markdown chunks previously added. Default is '', an empty report.}
 
 \item{dt}{data.frame containing the data to plot.}
 
@@ -42,7 +43,9 @@ add_scatterplot(
 
 \item{scales}{From ggplot2::facet_wrap: Should scales be 'fixed', 'free', or free in one dimension ('free_x', 'free_y'). Default is 'fixed'.}
 
-\item{smooth_trend}{If TRUE, adds a ggplot2::geom_smooth() line to the plot. Default is FALSE.}
+\item{show_trend}{If TRUE, adds a ggplot2::geom_smooth() line to the plot. Default is FALSE.}
+
+\item{trend_method}{The method ggplot2::geom_smooth will use. Default is 'loess', which is a local polynomial regression fit}
 
 \item{ggtheme}{ggplot2 theme function to apply. Default is ggplot2::theme_minimal.}
 
@@ -75,7 +78,7 @@ An R Markdown file as a character string, now containing a chunk for the specifi
 Add a scatter plot to a chronicle report
 }
 \examples{
-html_report <- add_scatterplot(report = new_report(),
+html_report <- add_scatterplot(report = "",
                             dt = ggplot2::mpg,
                             x = 'hwy',
                             y = 'cty',

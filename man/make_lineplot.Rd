@@ -11,12 +11,14 @@ make_lineplot(
   groups = NULL,
   faceted = FALSE,
   scales = "fixed",
-  smooth_trend = FALSE,
+  show_trend = FALSE,
+  trend_method = "loess",
   ggtheme = "minimal",
   x_axis_label = NULL,
   y_axis_label = NULL,
   plot_palette = NULL,
-  plot_palette_generator = "plasma"
+  plot_palette_generator = "plasma",
+  static = FALSE
 )
 }
 \arguments{
@@ -32,7 +34,9 @@ make_lineplot(
 
 \item{scales}{From ggplot2::facet_wrap: Should scales be 'fixed', 'free', or free in one dimension ('free_x', 'free_y'). Default is 'fixed'.}
 
-\item{smooth_trend}{If TRUE, adds a ggplot2::geom_smooth() line to the plot.}
+\item{show_trend}{If TRUE, adds a ggplot2::geom_smooth() line to the plot.}
+
+\item{trend_method}{The method ggplot2::geom_smooth will use. Default is 'loess', which is a local polynomial regression fit}
 
 \item{ggtheme}{ggplot2 theme function to apply. Default is ggplot2::theme_minimal.}
 
@@ -43,6 +47,8 @@ make_lineplot(
 \item{plot_palette}{Character vector of hex codes specifying the colors to use on the plot.}
 
 \item{plot_palette_generator}{Palette from the viridis package, used in case plot_palette is unspecified or insufficient for the number of colors required.}
+
+\item{static}{If TRUE, the output will be static ggplot chart instead of an interactive ggplotly chart. Default is FALSE.}
 }
 \value{
 A plotly-ized version of a grouped ggplot line plot.
