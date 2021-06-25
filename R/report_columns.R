@@ -1,10 +1,10 @@
 #' Plot all columns of a table
 #'
-#' Make boxplots for each numerical variable on a table, and barplots for each
+#' Make raincloud plots for each numerical variable on a table, and barplots for each
 #' categorical variable.
 #'
 #' @param dt Table to be plotted.
-#' @param by_column Name of the colum to use as groups for all the other plots
+#' @param by_column Name of the column to use as groups for all the other plots
 #'
 #' @return A list of plotly::ggplotly objects, one for each column of the table.
 #' @export
@@ -14,7 +14,7 @@
 plot_columns <- function(dt, by_column = NULL){
   # numeric values
   nums <- dt %>% purrr::keep(is.numeric) %>% colnames()
-  nums %<>% purrr::set_names(nums)
+  nums <- purrr::set_names(x = nums, nm = nums)
   if(length(nums) > 0){
     num_plots <- nums %>% purrr::map(~make_boxplot(dt = dt,
                                                    value = .x,
@@ -24,11 +24,13 @@ plot_columns <- function(dt, by_column = NULL){
 
   # categorical values
   cats <- dt %>% purrr::discard(is.numeric) %>% colnames()
-  cats %<>% purrr::set_names(cats)
+  cats <- purrr::set_names(x = cats, nm = cats)
   if(length(cats) > 0){
-    cat_plots <- cats %>% purrr::map(~make_barplot(dt = dt,
+    cat_plots <- cats %>% purrr::map(~chronicle::make_barplot(dt = dt,
                                                    bars = .x,
-                                                   break_bars_by = by_column))
+                                                   break_bars_by = by_column,
+                                                   horizontal = TRUE,
+                                                   sort_by_value = TRUE))
   }
   return(append(num_plots, cat_plots)[colnames(dt)])
 }
@@ -45,7 +47,10 @@ plot_columns <- function(dt, by_column = NULL){
 #' @param by_column Name of the column to use as groups for all the other plots. Default is NULL.
 #' @param filename Name of the output file. If not supplied, a generic name will be created.
 #' @param output_format The format of the R Markdown output. Default is 'rmdformats'.
+#' @param title Title of the report. If NULL (default), no title will be added.
 #' @param author Author of the report. Default is NULL.
+#' @param plot_palette Character vector of hex codes to use on plots.
+#' @param plot_palette_generator Palette from the viridis package used in case plot_palette is unspecified (or insufficient for the number of colors required.) Default value is 'plasma', and possible values are 'viridis', 'inferno', 'magma', 'plasma', 'cividis'.
 #' @param horizontal_bars Plot bars for categorical variables horizontally. Default is FALSE
 #' @param sort_bars_value Sort the bars by value. Default is FALSE.
 #' @param sort_bars_decreasingly Sort the bars decreasingly. Default is TRUE.
@@ -68,15 +73,16 @@ plot_columns <- function(dt, by_column = NULL){
 #' #                           by_column = 'Species',
 #' #                           horizontal_bars = TRUE,
 #' #                           keep_rmd = TRUE)
-#' # file.remove('iris_column_analysis.Rmd')
-#' # file.remove('iris_column_analysis.html')
 report_columns <- function(dt,
                            by_column = NULL,
                            filename = NULL,
                            output_format = 'rmdformats',
+                           title = NULL,
                            author = NULL,
-                           horizontal_bars = FALSE,
-                           sort_bars_value = FALSE,
+                           plot_palette = NULL,
+                           plot_palette_generator = 'plasma',
+                           horizontal_bars = TRUE,
+                           sort_bars_value = TRUE,
                            sort_bars_decreasingly = TRUE,
                            rmdformats_theme = 'downcute',
                            prettydoc_theme = 'leonids',
@@ -91,21 +97,25 @@ report_columns <- function(dt,
 
   # create report title
   dt_name <- deparse(substitute(dt))
+  if(is.null(title)){
   title <- paste(dt_name,
                  'Variable Analysis',
                  if(!is.null(by_column)){paste('by', by_column)})
+  }
 
   # create filename
   if(is.null(filename)){
     filename <- gsub(pattern = '[^[:alnum:][:space:]]',
                      replacement = '',
                      x = dt_name) %>%
-      paste0('_column_analysis')
+      paste0('_column_analysis',
+             if(!is.null(by_column)){paste0('_by_', by_column)},
+             collapse='')
   }
 
   # add sections for all numeric values
   nums <- dt %>% purrr::keep(is.numeric) %>% colnames()
-  nums %<>% purrr::set_names(nums)
+  nums <- purrr::set_names(x = nums, nm = nums)
   if(length(nums) > 0){
     num_plots <- nums %>% purrr::map(~chronicle::add_raincloud(dt = dt_name,
                                                   value = .x,
@@ -118,7 +128,7 @@ report_columns <- function(dt,
 
   # add sections for all categorical values
   cats <- dt %>% purrr::discard(is.numeric) %>% colnames()
-  cats %<>% purrr::set_names(cats)
+  cats <- purrr::set_names(x = cats, nm = cats)
   if(length(cats) > 0){
     cat_plots <- cats %>% purrr::map(~chronicle::add_barplot(dt = dt_name,
                                                   bars = .x,
@@ -149,20 +159,37 @@ report_columns <- function(dt,
     return((plot_sections))
   }
 
-  # add skimr::skim
-  plot_sections <- paste(add_code(code = paste0('skimr::skim(', dt_name, ')'),
-                                  code_title = 'Dataset overview',
-                                  echo = FALSE),
-                         add_title(title = 'Column Plots',
-                                   title_level = 1),
-                         plot_sections,
-                         sep = '\n')
+  plot_sections <-
 
+  # add head(20) and skimr::skim calls
+  plot_sections <- paste(
+    # head(20)
+    # add the base skim
+    add_code(code = paste0('skimr::skim(', dt_name, ')'),
+             code_title = 'Dataset overview',
+             echo = FALSE,
+             title_level = 1),
+    # add another skim section split by groups if the report is being done by groups
+    if(!is.null(by_column)){chronicle::add_code(code = glue::glue('skimr::skim(dplyr::group_by({dt_name}, {by_column}))
+                                                         dt_name <- dplyr::ungroup({dt_name})'),
+                                                code_title = glue::glue('Dataset overview by {by_column}'),
+                                                echo = FALSE,
+                                                title_level = 1)},
+    add_code(code = paste0('knitr::kable(head(', dt_name, ', 10))'),
+             code_title = 'First 10 rows',
+             echo = FALSE,
+             title_level = 3),
+    add_title(title = 'Variable Plots',
+              title_level = 1),
+    plot_sections,
+    sep = '\n')
 
   # render report
   chronicle::render_report(report = plot_sections,
                            title = title,
                            author = author,
+                           plot_palette = plot_palette,
+                           plot_palette_generator = plot_palette_generator,
                            filename = filename,
                            output_format = output_format,
                            rmdformats_theme = rmdformats_theme,

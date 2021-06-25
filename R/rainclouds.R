@@ -12,7 +12,7 @@
 #' @param x_axis_label Label for the x axis.
 #' @param plot_palette Character vector of hex codes specifying the colors to use on the plot.
 #' @param plot_palette_generator Palette from the viridis package used in case plot_palette is unspecified or insufficient for the number of colors required.
-#' @param static If TRUE, the output will be static ggplot chart instead of an interactive ggplotly chart. Default is FALSE.
+#' @param static If TRUE (or if the dataset is over 10,000 rows), the output will be static ggplot chart instead of an interactive ggplotly chart. Default is FALSE.
 #'
 #' @export
 #' @return A plotly-ized version of a ggplot raincloud plot.
@@ -43,6 +43,11 @@ make_raincloud <- function(dt,
     stop(paste(setdiff(dt_cols, colnames(dt)), collapse = ', '), ' not found on dt.')
   }
 
+  # coerce groups to character
+  if(!is.null(groups)){
+    dt <- chronicle::set_classes(dt, character = c(groups))
+  }
+
   # check how many colors are needed for plotting
   plot_palette_length <- ifelse(test = is.null(groups),
                                 yes = 1,
@@ -70,6 +75,9 @@ make_raincloud <- function(dt,
                                    'magma' = viridis::magma,
                                    'plasma' = viridis::plasma,
                                    'viridis' = viridis::viridis,
+                                   'mako' = viridis::mako,
+                                   'rocket' = viridis::rocket,
+                                   'turbo' = viridis::turbo,
                                    viridis::plasma)
 
   #if not provided, use palette from viridis::plasma
@@ -84,8 +92,11 @@ make_raincloud <- function(dt,
                       plot_palette_generator(plot_palette_length - length(plot_palette), begin = 0, end = .8))
   }
 
+  # create the plot structure depending of the group
+  hide_groups <- FALSE
   if(is.null(groups)){
     # make a dummy group variable
+    hide_groups <- TRUE
     groups <- 'groups'
     dt$groups <- 'A'
   }
@@ -159,6 +170,17 @@ make_raincloud <- function(dt,
     ggplot2::coord_cartesian(clip = "off", expand = TRUE)
 
 
+  if(!hide_groups){
+    raincloud <- raincloud +
+      ggplot2::facet_grid(rows = groups, scales = 'free_y')
+  }else{
+    raincloud <- raincloud +
+      ggplot2::theme(axis.title.y = ggplot2::element_blank(),
+                   axis.text.y = ggplot2::element_blank(),
+                   axis.ticks.y = ggplot2::element_blank(),
+                   strip.text.y = ggplot2::element_blank())
+  }
+
   # Boxplot -----------------------------------------------------------------
   if(as.logical(include_boxplot)){
     include_median <- TRUE
@@ -218,13 +240,6 @@ make_raincloud <- function(dt,
                             color = 'white',
                             alpha = .5,
                             size = 1)  +
-      # ggplot2::geom_point(data = boxplot_stats,
-      #                     ggplot2::aes(x = median,
-      #                                  y = 0,
-      #                                  fill = .data[[groups]]),
-      #                     color = 'white',
-      #                     size = 4,
-      #                     shape = 21) +
       ggplot2::geom_text(data = boxplot_stats,
                          ggplot2::aes(x = median,
                                       label = median,
@@ -248,12 +263,21 @@ make_raincloud <- function(dt,
                             size = 1)
   }
 
+  if(hide_groups){
+    raincloud <- raincloud +
+      ggplot2::theme(axis.title.y = ggplot2::element_blank(),
+                     axis.text.y = ggplot2::element_blank(),
+                     axis.ticks.y = ggplot2::element_blank())
+  }
+
+
   # axes
   if(!is.null(x_axis_label)){
     raincloud <- raincloud + ggplot2::xlab(x_axis_label)
   }
 
-  if(!as.logical(static)){
+  # only convert to plotly if the dataset is under 10,000 rows
+  if(!as.logical(static) & nrow(dt) <= 10000){
     raincloud <- plotly::ggplotly(raincloud, tooltip = c('x', if(groups != 'groups'){'fill'}))
   }
   return(raincloud)
@@ -305,7 +329,7 @@ add_raincloud <- function(report = '',
                           ggtheme = 'minimal',
                           x_axis_label = NULL,
                           plot_palette = NULL,
-                          plot_palette_generator = 'plasma',
+                          plot_palette_generator = NULL,
                           static = NULL,
                           raincloud_title = NULL,
                           title_level = 2,
@@ -330,7 +354,10 @@ add_raincloud <- function(report = '',
   #                       no = data.table::uniqueN(dt[[groups]]))
   # }
 
-  params <- list(value = value,
+  params <- list(dt = ifelse(test = is.character(dt),
+                             yes = dt,
+                             no = deparse(substitute(dt))),
+                 value = value,
                  groups = groups,
                  adjust = adjust,
                  include_boxplot = include_boxplot,
@@ -339,15 +366,13 @@ add_raincloud <- function(report = '',
                  force_all_jitter_obs = force_all_jitter_obs,
                  ggtheme = ggtheme,
                  x_axis_label = x_axis_label,
-                 plot_palette = plot_palette,
-                 plot_palette_generator = plot_palette_generator) %>%
+                 plot_palette = ifelse(is.null(plot_palette), 'params$plot_palette', plot_palette),
+                 plot_palette_generator = ifelse(is.null(plot_palette_generator), 'params$plot_palette_generator', plot_palette_generator),
+                 static = 'params$set_static') %>%
     purrr::discard(is.null)
 
   report <- chronicle::add_chunk(report = report,
-                                 dt_expr = ifelse(test = is.character(dt),
-                                                  yes = dt,
-                                                  no = deparse(substitute(dt))),
-                                 fun = make_raincloud,
+                                 fun = chronicle::make_raincloud,
                                  params = params,
                                  chunk_title = raincloud_title,
                                  title_level = title_level,
@@ -355,6 +380,7 @@ add_raincloud <- function(report = '',
                                  message = message,
                                  warning = warning,
                                  fig_width = fig_width,
-                                 fig_height = fig_height)
+                                 fig_height = fig_height,
+                                 guess_title = TRUE)
   return(report)
 }

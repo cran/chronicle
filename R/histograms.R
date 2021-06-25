@@ -10,7 +10,7 @@
 #' @param x_axis_label Label for the x axis.
 #' @param plot_palette Character vector of hex codes specifying the colors to use on the plot.
 #' @param plot_palette_generator Palette from the viridis package used in case plot_palette is unspecified or insufficient for the number of colors required.
-#' @param static If TRUE, the output will be static ggplot chart instead of an interactive ggplotly chart. Default is FALSE.
+#' @param static If TRUE (or if the dataset is over 10,000 rows), the output will be static ggplot chart instead of an interactive ggplotly chart. Default is FALSE.
 #'
 #' @export
 #' @return A plotly-ized version of a grouped ggplot histogram plot.
@@ -35,6 +35,11 @@ make_histogram <- function(dt,
   dt_cols <- c(value, groups)
   if(any((!dt_cols %in% colnames(dt)))){
     stop(paste(setdiff(dt_cols, colnames(dt)), collapse = ', '), ' not found on dt.')
+  }
+
+  # coerce groups and split_groups_by to characters
+  if(!is.null(groups)){
+    dt <- chronicle::set_classes(dt, character = c(groups))
   }
 
   # check how many colors are needed for plotting
@@ -64,6 +69,9 @@ make_histogram <- function(dt,
                                    'magma' = viridis::magma,
                                    'plasma' = viridis::plasma,
                                    'viridis' = viridis::viridis,
+                                   'mako' = viridis::mako,
+                                   'rocket' = viridis::rocket,
+                                   'turbo' = viridis::turbo,
                                    viridis::plasma)
 
   #if not provided, use palette from viridis::plasma
@@ -79,8 +87,10 @@ make_histogram <- function(dt,
   }
 
   # create the plot structure depending of the group
+  hide_groups <- FALSE
   if(is.null(groups)){
     # make a dummy group variable
+    hide_groups <- TRUE
     groups <- 'groups'
     dt$groups <- 'A'
   }
@@ -98,13 +108,14 @@ make_histogram <- function(dt,
     ggplot2::scale_fill_manual(values = plot_palette) +
     ggplot2::scale_color_manual(values = plot_palette)
 
-  if(is.null(groups)){
+  if(hide_groups){
     # remove all references to the dummy group variable from the plot
     histogram <- histogram +
       ggplot2::theme(legend.position = 'none',
                      axis.title.x = ggplot2::element_blank(),
                      axis.text.x = ggplot2::element_blank(),
-                     axis.ticks.x = ggplot2::element_blank())
+                     axis.ticks.x = ggplot2::element_blank(),
+                     strip.text.x = ggplot2::element_blank())
   }
 
   # axes
@@ -116,7 +127,8 @@ make_histogram <- function(dt,
   histogram <- histogram + ggplot2::facet_wrap(stats::as.formula(paste(groups, '~ .')),
                                                scales = scales)
 
-  if(!static){
+  # only convert to plotly if the dataset is under 10,000 rows
+  if(!as.logical(static) & nrow(dt) <= 10000){
     histogram <- plotly::ggplotly(histogram,
                                   tooltip = c('x', 'y', if(groups != 'groups'){'fill'}))
   }
@@ -178,22 +190,23 @@ add_histogram <- function(report = '',
     stop(paste(setdiff(dt_cols, colnames(dt)), collapse = ', '), ' not found on dt.')
   }
 
-  params <- list(value = value,
+  params <- list(dt = ifelse(test = is.character(dt),
+                             yes = dt,
+                             no = deparse(substitute(dt))),
+                 value = value,
                  groups = groups,
                  binwidth = binwidth,
                  bins = bins,
                  scales = scales,
                  ggtheme = ggtheme,
                  x_axis_label = x_axis_label,
-                 plot_palette = plot_palette,
-                 plot_palette_generator = plot_palette_generator) %>%
+                 plot_palette = ifelse(is.null(plot_palette), 'params$plot_palette', plot_palette),
+                 plot_palette_generator = ifelse(is.null(plot_palette_generator), 'params$plot_palette_generator', plot_palette_generator),
+                 static = 'params$set_static') %>%
     purrr::discard(is.null)
 
   report <- chronicle::add_chunk(report = report,
-                                 dt_expr = ifelse(test = is.character(dt),
-                                                  yes = dt,
-                                                  no = deparse(substitute(dt))),
-                                 fun = make_histogram,
+                                 fun = chronicle::make_histogram,
                                  params = params,
                                  chunk_title = histogram_title,
                                  title_level = title_level,
@@ -201,7 +214,8 @@ add_histogram <- function(report = '',
                                  message = message,
                                  warning = warning,
                                  fig_width = fig_width,
-                                 fig_height = fig_height)
+                                 fig_height = fig_height,
+                                 guess_title = TRUE)
   return(report)
 }
 
